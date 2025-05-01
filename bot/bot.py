@@ -1,0 +1,25 @@
+from config import Config
+from aiogram import Bot, Dispatcher
+from services.state_service import state_storage
+
+from handlers.test_handlers import test_router
+from handlers.admin_hendler import admin_router
+from aiogram.client.default import DefaultBotProperties
+from handlers.common import common_router
+
+def setup_handlers(dp: Dispatcher) -> None:
+    dp.include_router(common_router)
+    dp.include_router(test_router)
+    dp.include_router(admin_router)
+
+async def init_bot() -> None:
+    """Инициализация и запуск бота"""
+    bot = Bot(token=Config.TELEGRAM_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+    
+    # Используем Redis хранилище для состояний
+    storage = await state_storage.get_storage()
+    dp = Dispatcher(storage=storage)
+
+    setup_handlers(dp)
+
+    await dp.start_polling(bot)

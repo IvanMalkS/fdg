@@ -1,0 +1,57 @@
+# Ignore Python cache and bytecode files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore virtual environment directories
+.venv/
+venv/
+env/
+
+# Ignore Poetry cache and virtual environment
+.cache/
+
+# Ignore local environment configuration
+.env
+.env.*
+
+# Ignore git directories
+.git/
+.gitignore
+
+# Ignore IDE and editor configuration files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore macOS-specific files
+.DS_Store
+
+# Ignore node_modules if you have any frontend dependencies
+node_modules/
+
+# Ignore build and distribution directories
+build/
+dist/
+
+# Ignore Docker-specific files
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+
+# Ignore test-related files
+.coverage
+.tox/
+.pytest_cache/
+coverage/
+htmlcov/
+
+# Ignore log files
+*.log
+
+# Ignore any other temporary or unnecessary files
+*.tmp
+*.bak
+
+logs
