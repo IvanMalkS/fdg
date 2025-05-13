@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import inspect, select
 import os
 import pandas as pd
-from db.models import AiCreators, Models
+from db.models import AiCreators, Models, AiSettings
 from services.logger import logger
 from db.base import Base
 from config import Config
@@ -24,7 +24,7 @@ engine = create_async_engine(get_db_url())
 async def init_db():
     """Инициализирует БД и создаёт таблицы асинхронно."""
     async with engine.begin() as conn:
-        if Config.DROP_DB_ON_STARTUP == "True":
+        if Config.DROP_DB_ON_STARTUP:
             logger.info("Производится очистка БД")
             await conn.run_sync(Base.metadata.drop_all)
 
@@ -37,6 +37,10 @@ async def init_db():
         logger.info(f"Таблицы {', '.join(tables)} созданы")
 
     await load_data_from_excel()
+
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
+    async with async_session() as session:
+        await create_defaults_settings(session)
     logger.info("Базы данных созданы и заполнены")
     return engine
 
@@ -141,7 +145,7 @@ async def load_models(models_link: str, token: str, creator_id: int):
 
                     model = Models(
                         name=model_name,
-                        ai_creator_id=int(creator.id)
+                        ai_creator_id=int(creator_id)
                     )
                     session.add(model)
                     added_models += 1
@@ -173,3 +177,16 @@ async def get_selected_ai_creator():
                 return selected_ai_creator
             return None
         return None
+
+async def create_defaults_settings(session):
+    """Создаёт дефолтную запись настроек, если её нет"""
+    result = await session.execute(select(AiSettings))
+    settings = result.scalars().first()
+    if not settings:
+        settings = AiSettings(
+            temperature=0.7,
+            prompt=Config.DEFAULT_PROMPT
+        )
+        session.add(settings)
+        await session.commit()
+        await session.refresh(settings)

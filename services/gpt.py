@@ -16,25 +16,10 @@ async def analyze_with_chatgpt(
         question_id: int,
 ) -> dict:
     redis_service = RedisService()
-    prompt = redis_service.load_prompt
+    prompt = await redis_service.load_prompt()
 
     if not prompt:
-        prompt = (
-            "Оцени по критериям (0-5 баллов):\n"
-            "1. Полнота (покрытие пунктов эталона)\n"
-            "2. Точность терминов DAMA\n"
-            "3. Практическая применимость\n"
-            "4. Соответствие DMBOK\n\n"
-            "Алгоритм действий:\n"
-            "1. Если ответ полный (≥80% эталона) - верни оценку 5.\n"
-            "2. Если ответ частичный (30-80%) - задай 1 уточняющий вопрос.\n"
-            "3. Если ответ неверный (<30%) или отсутствует (например, 'None', пусто, 'не знаю') — НЕ задавай уточняющий вопрос, сразу оценивай.\n\n"
-            "Если ответ пустой, 'None', 'нет опыта', 'не знаю', 'не могу ответить', 'N/A' или аналогичный — оцени ответ как неверный и НЕ задавай уточняющий вопрос\n",
-            "Полностью пропускай этап уточнения для таких ответо\n"
-            "При ответе не по теме ставь 0 баллов.\n"
-            "В рекомендации желательно еще добавлять источники со ссылками.\n"
-            "Если считаешь, что эталонный вопрос недостаточно раскрывает тему, можешь добавить уточняющий вопрос (если пользователь хоть что-то ответил).\n"
-        )
+        prompt = Config.DEFAULT_PROMPT
 
     system_prompt = (
         f"Ты - строгий экзаменатор DAMA для роли {role}. Проверь ответ по компетенции '{competence}'.\n\n"
@@ -54,7 +39,7 @@ async def analyze_with_chatgpt(
         "}"
     )
 
-    for attempt in range(1, int(Config.RETRIES_AI_ASK) + 1):
+    for attempt in range(1, Config.RETRIES_AI_ASK + 1):
         try:
             ai_model_data = await redis_service.load_selected_ai_model()
             token = await redis_service.load_openai_token()
@@ -159,7 +144,7 @@ async def analyze_with_chatgpt(
 
                     except ValueError as e:
                         if str(e) == "invalid_json_response":
-                            if attempt < int(Config.RETRIES_AI_ASK):
+                            if attempt < Config.RETRIES_AI_ASK:
                                 continue
                         raise
 
@@ -186,12 +171,12 @@ async def analyze_with_chatgpt(
                     "weaknesses": ["Ваш ответ слишком длинный. Пожалуйста, сократите его и отправьте снова"],
                     "recommendations": []
                 }
-            elif attempt < int(Config.RETRIES_AI_ASK):
+            elif attempt < Config.RETRIES_AI_ASK:
                 continue
             raise
         except Exception as e:
             logger.error(f"Ошибка при попытке #{attempt}: {str(e)}", exc_info=True)
-            if attempt == int(Config.RETRIES_AI_ASK):
+            if attempt == Config.RETRIES_AI_ASK:
                 break
 
     # Фолбек

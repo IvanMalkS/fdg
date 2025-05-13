@@ -14,6 +14,7 @@ from services.redis_service import RedisService
 from db.models import DAMAQuestion, DAMACase
 from services.state_service import state_storage
 from typing import Dict, Any, Callable, Coroutine
+from services.user_utils import is_user_banned
 
 test_router = Router()
 
@@ -49,6 +50,10 @@ def _deserialize_case(data: Dict[str, Any]) -> DAMACase:
 @handle_errors("Произошла ошибка при запуске теста.")
 async def start_test(message: types.Message, state: FSMContext, **kwargs):
     """Начало тестирования - запрос ФИО"""
+    if message and message.from_user and await is_user_banned(message.from_user.id):
+        await message.answer("Вы заблокированы и не можете использовать бота.")
+        return
+        
     await state.set_state(TestStates.waiting_for_name)
     await message.answer(
         "Добро пожаловать в тестирование компетенций DAMA!\n\n"
@@ -61,8 +66,12 @@ async def start_test(message: types.Message, state: FSMContext, **kwargs):
 @handle_errors("Произошла ошибка при обработке вашего имени.")
 async def process_name(message: types.Message, state: FSMContext, **kwargs):
     """Обработка ФИО и переход к выбору роли"""
-    if not message.text.strip():
+    if not message or not message.text or not message.text.strip():
         await message.answer("Пожалуйста, введите ваше ФИО:")
+        return
+
+    if not message.from_user:
+        await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
         return
 
     user_name = message.text.strip()
@@ -79,6 +88,10 @@ async def process_name(message: types.Message, state: FSMContext, **kwargs):
 async def process_role(message: types.Message, state: FSMContext):
     """Обработка выбранной роли и переход к выбору компетенции"""
     try:
+        if not message.text:
+            await message.answer("Не удалось получить роль")
+            return
+
         selected_role = message.text.strip()
         valid_roles = await get_available_roles()
 
@@ -88,6 +101,11 @@ async def process_role(message: types.Message, state: FSMContext):
 
         await state.update_data(selected_role=selected_role)
         await state.set_state(TestStates.waiting_for_competency)
+
+        if not message.from_user:
+            await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
+            return
+
         await redis_service.save_user_metadata(message.from_user.id, {'selected_role': selected_role})
         await message.answer(
             f"Вы выбрали роль: <b>{selected_role}</b>\n\n"
@@ -104,14 +122,18 @@ async def process_competency(message: types.Message, state: FSMContext):
     """Обработка выбранной компетенции и подготовка теста"""
     try:
         data = await state.get_data()
+
+        if not message.text:
+            await message.answer("Не удалось выбрать роль")
+            return
+
         selected_comp = message.text.strip()
 
         valid_comps = await get_competencies_for_role(data['selected_role'])
         if selected_comp not in valid_comps:
-            competencies = await get_competencies_for_role(data['selected_role'])
             await message.answer(
                 "Пожалуйста, выберите компетенцию из предложенного списка:",
-                reply_markup=await build_competencies_keyboard(competencies)
+                reply_markup=await build_competencies_keyboard(data['selected_role'])
             )
             return
 
@@ -137,6 +159,10 @@ async def process_competency(message: types.Message, state: FSMContext):
             'has_case': bool(test_data['case']),
             'prepared_data': serialized_test_data
         })
+
+        if not message.from_user:
+            await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
+            return
 
         await redis_service.save_user_metadata(message.from_user.id, {
             'selected_comp': selected_comp,
@@ -189,6 +215,11 @@ async def start_testing(message: types.Message, state: FSMContext):
         await state.update_data(serialized_data)
         await state.set_state(TestStates.answering_question)
         data = await state.get_data()
+
+        if not message.from_user:
+            await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
+            return
+
         await redis_service.save_user_metadata(message.from_user.id, {
             'user_name': data['user_name'],
             'selected_role': data['selected_role'],
@@ -232,92 +263,114 @@ async def process_answer(message: types.Message, state: FSMContext, **kwargs):
     data = await state.get_data()
     current_idx = data['current_question']
     questions = data['questions']
-    user_id = message.from_user.id
 
-    if data.get('awaiting_clarification', False):
-        return await handle_clarification_response(message, state)
-
-    current_question = _deserialize_question(questions[current_idx])
-
-    analysis = await analyze_with_chatgpt(
-        question_text=current_question.question,
-        correct_answer=current_question.question_answer,
-        user_answer=message.text,
-        role=data['selected_role'],
-        competence=data['selected_comp'],
-        user_id=user_id,
-        question_id=current_idx
-    )
-
-
-    if analysis.get('needs_clarification', False) and data.get('clarification_count', 0) < 2:
-        clarification_prompt = (
-            f"Пользователь ответил на вопрос '{current_question.question}' следующим образом:\n\n"
-            f"{message.text}\n\n"
-            f"Уточняющий вопрос: {analysis['clarification_question']}\n\n"
-            "Пожалуйста, дайте более развернутый ответ, учитывая предыдущее сообщение."
-        )
-
-        await state.update_data({
-            'awaiting_clarification': True,
-            'clarification_question': clarification_prompt,
-            'previous_feedback': analysis,
-            'previous_answer': message.text,
-            'clarification_count': data.get('clarification_count', 0) + 1
-        })
-
-        await message.answer(
-            analysis['clarification_question'],
-            parse_mode="HTML"
-        )
+    if not message.from_user:
+        await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
         return
 
-    answer_data = {
-        'question': current_question.question,
-        'user_answer': message.text,
-        'correct_answer': current_question.question_answer,
-        'score': analysis['score'],
-        'feedback': {
-            'strengths': analysis['strengths'],
-            'weaknesses': analysis['weaknesses'],
-            'recommendations': analysis['recommendations']
-        },
-        'knowledge_area': current_question.dama_knowledge_area,
-        'main_job': current_question.dama_main_job,
-        'question_type': current_question.question_type,
-        'timestamp': datetime.now().isoformat(),
-        'clarification_used': data.get('clarification_count', 0) > 0
-    }
+    if data.get('processing', False):
+        await message.answer("Ваш ответ обрабатывается, пожалуйста, подождите...")
+        return
 
-    await redis_service.save_answers_to_redis(
-        user_id=user_id,
-        question_id=current_idx,
-        data=answer_data
-    )
+    await state.update_data(processing=True)    
+    try:
+        user_id = message.from_user.id
 
-    new_data = {
-        'current_question': current_idx + 1,
-        'answers': data['answers'] + [answer_data],
-        'awaiting_clarification': False,
-        'clarification_count': 0
-    }
-    await state.update_data(new_data)
+        if data.get('awaiting_clarification', False):
+            return await handle_clarification_response(message, state)
 
-    feedback_msg = format_feedback(analysis)
-    await message.answer(feedback_msg, parse_mode="HTML")
+        current_question = _deserialize_question(questions[current_idx])
 
-    await asyncio.sleep(2)
+        analysis = await analyze_with_chatgpt(
+            question_text=str(current_question.question),
+            correct_answer=str(current_question.question_answer),
+            user_answer=str(message.text),
+            role=data['selected_role'],
+            competence=data['selected_comp'],
+            user_id=user_id,
+            question_id=current_idx
+        )
 
-    if new_data['current_question'] >= len(questions):
-        await handle_case_presentation(message, state)
-    else:
-        await ask_question(message, state)
+
+        if analysis.get('needs_clarification', False) and data.get('clarification_count', 0) < 2:
+            clarification_prompt = (
+                f"Пользователь ответил на вопрос '{current_question.question}' следующим образом:\n\n"
+                f"{message.text}\n\n"
+                f"Уточняющий вопрос: {analysis['clarification_question']}\n\n"
+                "Пожалуйста, дайте более развернутый ответ, учитывая предыдущее сообщение."
+            )
+
+            await state.update_data({
+                'question_id': current_question.id,
+                'awaiting_clarification': True,
+                'clarification_question': clarification_prompt,
+                'previous_feedback': analysis,
+                'previous_answer': message.text,
+                'clarification_count': data.get('clarification_count', 0) + 1
+            })
+
+            await message.answer(
+                analysis['clarification_question'],
+                parse_mode="HTML"
+            )
+            return
+
+        answer_data = {
+            'question_id': current_question.id,
+            'question': current_question.question,
+            'user_answer': message.text,
+            'correct_answer': current_question.question_answer,
+            'score': analysis['score'],
+            'feedback': {
+                'strengths': analysis['strengths'],
+                'weaknesses': analysis['weaknesses'],
+                'recommendations': analysis['recommendations']
+            },
+            'knowledge_area': current_question.dama_knowledge_area,
+            'main_job': current_question.dama_main_job,
+            'question_type': current_question.question_type,
+            'timestamp': datetime.now().isoformat(),
+            'clarification_used': data.get('clarification_count', 0) > 0
+        }
+
+        await redis_service.save_answers_to_redis(
+            user_id=user_id,
+            question_id=current_idx,
+            data=answer_data
+        )
+
+        new_data = {
+            'current_question': current_idx + 1,
+            'answers': data['answers'] + [answer_data],
+            'awaiting_clarification': False,
+            'clarification_count': 0
+        }
+        await state.update_data(new_data)
+
+        feedback_msg = format_feedback(analysis)
+        await message.answer(feedback_msg, parse_mode="HTML")
+
+        await asyncio.sleep(2)
+
+        if new_data['current_question'] >= len(questions):
+            await handle_case_presentation(message, state)
+        else:
+            await ask_question(message, state)
+    except Exception as e:
+        logger.error(e)
+    finally:
+        await state.update_data(processing=False)
 
 async def handle_clarification_response(message: types.Message, state: FSMContext):
     """Обработка ответа на уточняющий вопрос"""
     data = await state.get_data()
     current_idx = data['current_question']
     questions = data['questions']
+
+    if not message.from_user:
+        await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
+        return
+
     user_id = message.from_user.id
 
     try:
@@ -330,7 +383,7 @@ async def handle_clarification_response(message: types.Message, state: FSMContex
 
         analysis = await analyze_with_chatgpt(
             question_text=data['clarification_question'],
-            correct_answer=current_question.question_answer,
+            correct_answer=str(current_question.question_answer),
             user_answer=context,
             role=data['selected_role'],
             competence=data['selected_comp'],
@@ -340,6 +393,7 @@ async def handle_clarification_response(message: types.Message, state: FSMContex
 
         prev_answer = data['answers'][-1] if data['answers'] else None
         if prev_answer:
+            prev_answer['question_id'] = current_question.id
             combined_answer = f"{prev_answer['user_answer']}\n\nДополнение: {message.text}"
             prev_answer['user_answer'] = combined_answer
             prev_answer['score'] = (prev_answer.get('score', 0) + analysis['score']) / 2
@@ -393,13 +447,19 @@ async def handle_clarification_response(message: types.Message, state: FSMContex
             'current_question': current_idx + 1
         })
         await ask_question(message, state)
+    finally:
+        await state.update_data(processing=False)
 
 async def handle_case_presentation(message: types.Message, state: FSMContext):
     """Представление сценарного кейса (если есть)"""
     data = await state.get_data()
 
+    if not message.from_user:
+        await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
+        return
+
     if not data.get('case'):
-        await generate_report(message, message.from_user.id)
+        await generate_report(message, message.from_user.id, state)
         return
 
     case = _deserialize_case(data['case'])
@@ -417,16 +477,25 @@ async def handle_case_presentation(message: types.Message, state: FSMContext):
 async def process_case_answer(message: types.Message, state: FSMContext):
     """Обработка ответа на сценарный кейс"""
     data = await state.get_data()
+    
+    if not message.from_user:
+        await message.answer("Не удалось определить пользователя. Пожалуйста, попробуйте позже.")
+        return
+
     user_id = message.from_user.id
     current_idx = data['current_question'] + 1
+    if data.get('processing', False):
+        await message.answer("Ваш ответ обрабатывается, пожалуйста, подождите...")
+        return
 
+    await state.update_data(processing=True) 
     try:
         case = _deserialize_case(data['case'])
 
         analysis = await analyze_with_chatgpt(
             question_text=f"{case.situation}\n\n{case.case_task}",
-            correct_answer=case.case_answer,
-            user_answer=message.text,
+            correct_answer=str(case.case_answer),
+            user_answer=str(message.text),
             role=data['selected_role'],
             competence=data['selected_comp'],
             user_id = user_id,
@@ -435,6 +504,7 @@ async def process_case_answer(message: types.Message, state: FSMContext):
 
 
         case_data = {
+            'case_id': case.id,
             'question': f"{case.situation}\n\n{case.case_task}",
             'user_answer': message.text,
             'correct_answer': case.case_answer,
@@ -464,8 +534,9 @@ async def process_case_answer(message: types.Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка при обработке кейса: {e}")
         await message.answer("Произошла ошибка при оценке кейса. Переходим к отчету...")
-
-    await generate_report(message, user_id, state)
+    finally:
+        await state.update_data(processing=False)
+        await generate_report(message, user_id, state)
 
 async def generate_report(message: types.Message, user_id: int, state: FSMContext):
     """Генерация отчета и загрузка в MinIO"""
@@ -544,5 +615,4 @@ def format_feedback(analysis: dict, is_case: bool = False) -> str:
     return (
         f"<b>Ваш ответ на {question_type} оценен на {analysis['score']:.1f}/5.0</b>\n\n"
         f"<i>Сильные стороны:</i>\n{strengths}\n\n"
-        f"<i>Рекомендации:</i>\n{recommendations}"
-    )
+        f"<i>Рекомендации:</i>\n{recommendations}"    )

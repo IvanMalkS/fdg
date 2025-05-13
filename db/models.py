@@ -1,18 +1,22 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, CheckConstraint, Float, Boolean, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Text, CheckConstraint, Float, Boolean, ForeignKey, DateTime, \
+    UniqueConstraint, false
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+
+from config import Config
 from db.base import Base
+from db.enums import UserRole
+from sqlalchemy import BigInteger
 
 class User(Base):
     __tablename__ = 'dama_users'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    id = Column(BigInteger, primary_key=True)
+    role = Column(String, default=UserRole.USER)
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=False)
     username = Column(String(255), nullable=False)
     role = Column(String(255), nullable=False, default='user')
-    dama_role = Column(String(255), nullable=True)
-    dama_competence_name = Column(String(255), nullable=True)
     test_results = relationship("TestResults", back_populates="user")
 
     __table_args__ = (
@@ -25,7 +29,7 @@ class TestResults(Base):
     __tablename__ = 'dama_test_results'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('dama_users.id'), nullable=False)
+    user_id = Column(BigInteger, ForeignKey('dama_users.id'), nullable=False)
     dama_role = Column(String(255), nullable=False)
     dama_competence = Column(String(255), nullable=False)
     total_score = Column(Float, nullable=False)
@@ -123,10 +127,11 @@ class Models(Base):
 class AiSettings(Base):
     __tablename__ = 'ai_settings'
     id = Column(Integer, primary_key=True, index=True)
-    temperature = Column(Float, nullable=False, default=0.7)
-    prompt = Column(Text, nullable=True)
+    temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.7)
+    prompt = Column(Text, nullable=True, default=Config.DEFAULT_PROMPT)
 
     __table_args__ = (
+        UniqueConstraint('id', name='single_row'),
         CheckConstraint("temperature >= 0 AND temperature <= 2", name="check_temperature_range"),
     )
 

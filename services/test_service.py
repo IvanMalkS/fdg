@@ -111,7 +111,7 @@ async def generate_test_report(user_id: int):
             test_result_id = result.scalar_one()
 
             for answer in answers:
-                print(answer)
+                logger.debug(f"Answer: {answer}")
 
                 if not answer.get('user_answer'):
                     logger.warning(f"Skipping answer with empty text: {answer}")
@@ -145,7 +145,11 @@ async def generate_test_report(user_id: int):
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "DAMA Assessment Report"
+    
+    if ws is not None: 
+        ws.title = "DAMA Assessment Report"
+    else:
+        ws = wb.create_sheet("DAMA Assessment Report")
 
     header_font = Font(bold=True, name='Century Gothic', size=12)
     body_font = Font(name='Century Gothic', size=11)
@@ -206,6 +210,9 @@ async def generate_test_report(user_id: int):
                 cell.border = thin_border
 
     for answer in answers:
+        if not answer.get('user_answer'):
+            continue
+
         feedback = answer.get('feedback', {})
         recommendations = feedback.get('recommendations', '')
         if isinstance(recommendations, list):

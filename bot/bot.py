@@ -16,7 +16,6 @@ async def init_bot() -> None:
     """Инициализация и запуск бота"""
     bot = Bot(token=Config.TELEGRAM_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     
-    # Используем Redis хранилище для состояний
     storage = await state_storage.get_storage()
     dp = Dispatcher(storage=storage)
 

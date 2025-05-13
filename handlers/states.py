@@ -12,11 +12,12 @@ class TestStates(StatesGroup):
     answering_case = State()
 
 class AdminStates(StatesGroup):
+    check_password = State()
     creator_name = State()
     creator_token = State()
     creator_url = State()
     models_url = State()
     model_name = State()
-    model_temperature = State()
-    select_temperature = State()
     update_temperature = State()
+    update_prompt = State()
+    users_list = State()

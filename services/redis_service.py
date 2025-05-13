@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 
 from numpy.f2py.auxfuncs import throw_error
 from redis.asyncio import Redis
+from sqlalchemy import false
 
 from config import Config
 from sqlalchemy.future import select
@@ -94,7 +95,7 @@ class RedisService:
             key = f"user:{user_id}:metadata"
             return await self.redis_client.delete(key)
         except Exception as e:
-            print(f"Error clearing user metadata: {e}")
+            logger.error(f"Error clearing user metadata: {e}")
             return 0
 
     async def save_openai_token(self, token: str) -> bool:
@@ -118,8 +119,9 @@ class RedisService:
 
             ai_creator = await get_selected_ai_creator()
             if ai_creator:
-                await self.save_openai_token(ai_creator.token)
-                return ai_creator.token
+                token = str(ai_creator.token)
+                await self.save_openai_token(token)
+                return token
 
             return None
 
@@ -150,12 +152,13 @@ class RedisService:
                 )
                 selected_model = result.scalar_one_or_none()
                 if selected_model:
-                    await self.save_selected_ai_model(selected_model.name)
-                    return selected_model.name
+                    model_name = str(selected_model.name)
+                    await self.save_selected_ai_model(model_name)
+                    return model_name
 
             return None
         except Exception as e:
-            print(f"Error loading model from redis: {e}")
+            logger.error(f"Error loading model from redis: {e}")
             return None
 
     async def save_selected_url(self, url: str) -> bool:
@@ -165,6 +168,7 @@ class RedisService:
             return bool(result)
         except Exception as e:
             logger.error(f"Error saving url in redis: {e}")
+            return False
 
     async def load_selected_url(self):
         try:
@@ -175,8 +179,9 @@ class RedisService:
 
             ai_creator = await get_selected_ai_creator()
             if ai_creator:
-                await self.save_selected_url(ai_creator.url)
-                return ai_creator.url
+                url = str(ai_creator.url)
+                await self.save_selected_url(url)
+                return url
             return None
         except Exception as e:
             logger.error(f"Error loading url from redis: {e}")
@@ -191,21 +196,30 @@ class RedisService:
             return False
 
     async def load_model_temperature(self) -> Optional[float]:
-        """Loads model temperature"""
+        """Loads model temperature with proper type checking"""
         try:
             redis_temp = await self.redis_client.get("openai:model_temperature")
             if redis_temp:
-                return float(redis_temp.decode('utf-8')) if isinstance(redis_temp, bytes) else float(redis_temp)
+                try:
+                    return float(redis_temp.decode('utf-8')) if isinstance(redis_temp, bytes) else float(redis_temp)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid temperature value in Redis: {e}")
 
             async with get_async_session() as session:
-                result = await session.execute(select(AiSettings))
-                ai_settings = result.scalar_one_or_none()
-                if ai_settings:
-                    return ai_settings.temperature
+                result = await session.execute(select(AiSettings.temperature))
+                temp_value = result.scalar_one_or_none()  
+                
+                if temp_value is not None:
+                    try:
+                        temperature = float(temp_value)
+                        await self.save_model_temperature(temperature)
+                        return temperature
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Invalid temperature value in DB: {e}")
 
             return None
         except Exception as e:
-            logger.error(f"Error loading model temperature from redis: {e}")
+            logger.error(f"Error loading model temperature: {e}")
             return None
     
     async def save_prompt(self, prompt: str) -> bool:
@@ -228,7 +242,9 @@ class RedisService:
                 result = await session.execute(select(AiSettings))
                 ai_settings = result.scalar_one_or_none()
                 if ai_settings:
-                    return ai_settings.prompt
+                    prompt = str(ai_settings.prompt)
+                    await self.save_prompt(prompt)
+                    return prompt
 
             return None
         except Exception as e:
