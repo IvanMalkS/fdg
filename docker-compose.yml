@@ -88,6 +88,7 @@ services:
       DROP_DB_ON_STARTUP: ${DROP_DB_ON_STARTUP}
       RETRIES_AI_ASK: ${RETRIES_AI_ASK}
       SECURE: ${SECURE}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
