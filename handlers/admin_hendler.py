@@ -585,7 +585,7 @@ async def handle_users_page(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Error handling users page: {e}")
         await callback.answer("Ошибка при переходе по страницам")
 
-@admin_router.callback_query(F.data.startswith("select_user:"))
+@admin_router.callback_query(F.data.startswith("make_admin:"))
 async def handle_select_user(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора пользователя"""
     try:

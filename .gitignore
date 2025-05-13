@@ -33,3 +33,5 @@ htmlcov/
 .local/
 
 har_and_cookies/
+
+redisdata/
