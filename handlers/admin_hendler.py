@@ -269,7 +269,7 @@ async def process_creator_name(message: Message, state: FSMContext):
     """Обработка названия провайдера"""
     await state.update_data(creator_name=message.text)
     await state.set_state(AdminStates.creator_token)
-    await message.answer("Введите API токен для этого провайдера:")
+    await message.answer("Введите API токен для этого провайдера:\n После ввода он удалиться")
 
 
 @admin_router.message(AdminStates.creator_token)
@@ -279,7 +279,10 @@ async def process_creator_token(message: Message, state: FSMContext):
         await message.delete()
         await state.update_data(creator_token=message.text)
         await state.set_state(AdminStates.creator_url)
-        await message.answer("Введите URL API для этого провайдера:")
+        await message.answer(
+            "Введите URL API для чата с GPT моделью этого провайдера: \n"
+            "Пример: https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        )
     except Exception as e:
         logger.error(f"Ошибка при удалении сообщения с токеном: {e}")
         await message.answer("Произошла ошибка при обработке токена. Пожалуйста, попробуйте еще раз.")
@@ -311,7 +314,8 @@ async def process_creator_url(message: Message, state: FSMContext):
         await state.set_state(AdminStates.models_url)
         await message.answer(
             f"Провайдер {data['creator_name']} успешно добавлен!\n"
-            "Теперь введите URL для загрузки моделей от этого провайдера:"
+            "Теперь введите URL для загрузки моделей от этого провайдера:\n"
+            "Пример: https://generativelanguage.googleapis.com/v1beta/openai/models"
         )
 
 
