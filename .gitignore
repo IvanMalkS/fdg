@@ -20,9 +20,6 @@ dist/
 *.egg-info/
 *.egg
 
-excel/dama_cases.xlsx
-excel/dama_questions.xlsx
-
 .coverage
 htmlcov/
 .pytest_cache/
