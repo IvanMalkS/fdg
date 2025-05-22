@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  keycloak:
+    image: harbor.parmalogica.ru/rsaa/mirs-rsaa-kk:{{ build_id }}
+    environment:
+      KC_FEATURES: admin2
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_LOGLEVEL: DEBUG
+    volumes:
+     - ./keycloak.conf:/opt/keycloak/conf/keycloak.conf
+    command:
+#  --log-level=DEBUG
+      - start-dev
+    ports:
+      - 8080:8080
+      - 8443:8443

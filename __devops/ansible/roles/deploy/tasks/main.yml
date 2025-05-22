@@ -1,0 +1,26 @@
+---
+- name: "Stage 1: Create directory for archives"
+  file:
+    path: "{{ direcory_pipeline }}"
+    state: directory
+
+- name: "Stage 2: save docker-compose file"
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: tfs_cd_user
+    group: tfs_cd_user
+    mode: '0644'
+  loop:
+    - { src: "docker-compose.yml.j2", dest: "{{ direcory_pipeline }}/docker-compose.yml" }
+
+- name: "Stage 3: Delete keycloak-keycloak containers"
+  community.docker.docker_container:
+    name: tg-bot
+    state: absent
+
+- name: "Stage 4: Run containers"
+  community.docker.docker_compose:
+    project_name: tg-bot
+    project_src: "{{ direcory_pipeline }}"
+  register: output
