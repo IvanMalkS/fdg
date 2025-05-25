@@ -8,8 +8,8 @@
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    owner: tfs_cd_user
-    group: tfs_cd_user
+    owner: tfs-user
+    group: tfs-user
     mode: '0644'
   loop:
     - { src: "docker-compose.yml.j2", dest: "{{ direcory_pipeline }}/docker-compose.yml" }
