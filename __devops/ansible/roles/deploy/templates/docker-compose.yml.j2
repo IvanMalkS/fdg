@@ -1,26 +1,26 @@
+version: '3.3'
 services:
   postgres:
-    container_name: ${CONTAINER_NAME}_postgres
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_postgres
     image: postgres:16.4-alpine
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-U", "${DB_USER}", "-d", "${DB_NAME}"]
       interval: 30s
       timeout: 60s
       retries: 5
-      start_period: 80s
     restart: unless-stopped
     ports:
       - "${DB_PORT}:5432"
 
   redis:
     image: redis:7.4-alpine
-    container_name: ${CONTAINER_NAME}_redis
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_redis
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_USER=${REDIS_USER}
@@ -28,7 +28,7 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
     volumes:
-      - redis_data:/data
+      - {{ hostvars[inventory_hostname].group_names[0] }}_redis_data:/data
     deploy:
       resources:
         limits:
@@ -57,11 +57,28 @@ services:
     tty: true
     stdin_open: true
 
+  minio:
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_minio
+    image: minio/minio:latest
+    restart: unless-stopped
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_ADMIN_PORT}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:/data
+
   tg_bot:
-    container_name: ${CONTAINER_NAME}_tg_bot
-    build:
-      context: .
-      dockerfile: Dockerfile
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_tg_bot
+    image: harbor.parmalogica.ru/sharedgit/tg_bot:{{ build_id }}
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -85,37 +102,12 @@ services:
       SECURE: ${SECURE}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+      - postgres
+      - redis
+      - minio
     restart: unless-stopped
-
-  minio:
-    container_name: ${CONTAINER_NAME}_minio
-    image: minio/minio:latest
-    restart: unless-stopped
-    ports:
-      - "${MINIO_PORT}:9000"
-      - "${MINIO_ADMIN_PORT}:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - minio_data:/data
 
 volumes:
-  postgres_data:
-    name: ${CONTAINER_NAME}_postgres_data
-  redis_data:
-    name: ${CONTAINER_NAME}_redis_data
-  minio_data:
-    name: ${CONTAINER_NAME}_minio_data
+  {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data:
+  {{ hostvars[inventory_hostname].group_names[0] }}_redis_data:
+  {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:

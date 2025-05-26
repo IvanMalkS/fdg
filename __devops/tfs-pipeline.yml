@@ -1,0 +1,44 @@
+trigger:
+  branches:
+    include:
+    - '*'
+
+variables:
+  - group: 'tg-bot deploy user'
+
+resources:
+- repo: self
+
+stages:
+- stage: Build
+  displayName: 'Build image'
+  pool:
+    name: SharedGit
+  jobs:
+  - job: Build
+    displayName: Build
+    steps:
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'harbor-tg-bot'
+        repository: 'sharedgit/tg_bot'
+        command: 'buildAndPush'
+        Dockerfile: 'Dockerfile'
+        buildContext: './'
+
+- stage: Deploy
+  displayName: 'Deploy to tg-bot-test'
+  pool:
+    name: SharedGit
+  jobs:
+    - job: Deploy
+      displayName: 'Deploy on dev'
+      steps:
+        - script: |
+            docker run -w /deploy/ansible -v $(pwd)/__devops:/deploy \
+            harbor.parmalogica.ru/base/python/ansible/k8s:3.12-alpine3.18-v1.0.1 \
+            ansible-playbook -i inventory/hosts -l dev \
+            deploy-pipeline.yaml \
+            -e "build_id=$(Build.BuildId) \
+                ansible_sudo_pass=$(pass_tfs_cd_user) \
+                ansible_password=$(pass_tfs_cd_user)"
