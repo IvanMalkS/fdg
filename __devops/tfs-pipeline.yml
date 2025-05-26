@@ -31,8 +31,8 @@ stages:
   pool:
     name: SharedGit
   jobs:
-    - job: Deploy on dev
-      displayName: Deploy on dev
+    - job: Deploy
+      displayName: 'Deploy on dev'
       steps:
         - script: |
             docker run -w /deploy/ansible -v $(pwd)/__devops:/deploy \
