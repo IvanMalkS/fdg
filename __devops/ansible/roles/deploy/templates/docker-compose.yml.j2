@@ -111,9 +111,9 @@ services:
       - {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:/data
 
 volumes:
-  postgres_data:
+  {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data:
     name: {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data
-  redis_data:
+  {{ hostvars[inventory_hostname].group_names[0] }}_redis_data:
     name: {{ hostvars[inventory_hostname].group_names[0] }}_redis_data
-  minio_data:
+  {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:
     name: {{ hostvars[inventory_hostname].group_names[0] }}_minio_data
