@@ -516,7 +516,7 @@ def build_users_keyboard(users: list, page: int, page_size: int = 10):
     for user in users:
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(
-                text=f"{user.id} - {user.username or 'No username'}",
+                text=f"{user.id} - {user.username or 'No username'} - {user.role}",
                 callback_data=f"user_info:{user.id}"
             )
         ])
