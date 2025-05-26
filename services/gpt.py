@@ -1,6 +1,6 @@
 import json
 import aiohttp
-
+from typing import Optional
 from config import Config
 from services.logger import logger
 from services.redis_service import RedisService
@@ -14,6 +14,7 @@ async def analyze_with_chatgpt(
         competence: str,
         user_id: int,
         question_id: int,
+        prev_answer: Optional[str] = None
 ) -> dict:
     redis_service = RedisService()
     prompt = await redis_service.load_prompt()
@@ -25,7 +26,17 @@ async def analyze_with_chatgpt(
         f"Ты - строгий экзаменатор DAMA для роли {role}. Проверь ответ по компетенции '{competence}'.\n\n"
         f"ВОПРОС: {question_text}\n"
         f"ЭТАЛОННЫЙ ОТВЕТ: {correct_answer}\n"
-        f"ОТВЕТ КАНДИДАТА: {user_answer}\n\n"
+    )
+    
+    if prev_answer:
+        system_prompt += (
+            f"ПРЕДЫДУЩИЙ ОТВЕТ КАНДИДАТА: {prev_answer}\n"
+            f"УТОЧНЯЮЩИЙ ОТВЕТ: {user_answer}\n\n"
+        )
+    else:
+        system_prompt += f"ОТВЕТ КАНДИДАТА: {user_answer}\n\n"
+        
+    system_prompt += (
         f"{prompt}"
         "Формат ответа (JSON):\n"
         "{\n"

@@ -50,7 +50,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
             await message.answer(
                 f"{welcome_message}\n\n"
-                "Для начала тестирования компетенций DAMA нажмите кнопку ниже:",
+                "Для начала тестирования компетенций DAMA нажмите кнопку ниже: ⬇️",
                 reply_markup=build_start_buttons()
             )
         except Exception as e:
