@@ -91,10 +91,16 @@ async def process_name(message: types.Message, state: FSMContext, **kwargs):
     await state.set_state(TestStates.waiting_for_role)
     await redis_service.save_user_metadata(message.from_user.id, {'user_name': user_name})
 
+    valid_roles = await get_available_roles()
+    roles_list = "\n".join(
+        f"{i+1}. {role}" for i, role in enumerate(valid_roles)
+    )
+    
     await message.answer(
-        "Выберите вашу роль DAMA из списка ниже: ⬇️\n\n"
-        "Пожалуйста, нажмите на соответствующую кнопку:",
-        reply_markup=await build_roles_keyboard()
+        "Выберите вашу роль DAMA из списка ниже:\n\n"
+        f"{roles_list}\n\n"
+        "Пожалуйста, введите номер соответствующей роли:",
+        reply_markup=types.ReplyKeyboardRemove()
     )
 
 @test_router.message(TestStates.waiting_for_role)
@@ -105,12 +111,26 @@ async def process_role(message: types.Message, state: FSMContext):
             await message.answer("Не удалось получить роль")
             return
 
-        selected_role = message.text.strip()
         valid_roles = await get_available_roles()
-
-        if selected_role not in valid_roles:
-            await message.answer("Пожалуйста, выберите роль из предложенного списка:")
-            return
+        
+        if message.text.strip().isdigit():
+            role_index = int(message.text.strip()) - 1
+            if 0 <= role_index < len(valid_roles):
+                selected_role = valid_roles[role_index]
+            else:
+                await message.answer("Пожалуйста, введите число из предложенного списка:")
+                return
+        else:
+            selected_role = message.text.strip()
+            if selected_role not in valid_roles:
+                roles_list = "\n".join(
+                    f"{i+1}. {role}" for i, role in enumerate(valid_roles)
+                )
+                await message.answer(
+                    f"Пожалуйста, выберите роль из списка, введя соответствующее число:\n\n"
+                    f"{roles_list}"
+                )
+                return
 
         await state.update_data(selected_role=selected_role)
         await state.set_state(TestStates.waiting_for_competency)
@@ -120,11 +140,19 @@ async def process_role(message: types.Message, state: FSMContext):
             return
 
         await redis_service.save_user_metadata(message.from_user.id, {'selected_role': selected_role})
+        
+        valid_comps = await get_competencies_for_role(selected_role)
+        comps_list = "\n".join(
+            f"{i+1}. {comp}" for i, comp in enumerate(valid_comps)
+        )
+        
         await message.answer(
             f"Вы выбрали роль: <b>{selected_role}</b>\n\n"
-            "Теперь выберите компетенцию для тестирования:",
-            reply_markup=await build_competencies_keyboard(selected_role),
-            parse_mode="HTML"
+            "Выберите компетенцию из списка ниже:\n\n"
+            f"{comps_list}\n\n"
+            "Пожалуйста, введите номер соответствующей компетенции:",
+            parse_mode="HTML",
+            reply_markup=types.ReplyKeyboardRemove()
         )
     except Exception as e:
         logger.error(f"Ошибка при обработке роли: {e}")
@@ -140,15 +168,38 @@ async def process_competency(message: types.Message, state: FSMContext):
             await message.answer("Не удалось выбрать роль")
             return
 
-        selected_comp = message.text.strip()
-
         valid_comps = await get_competencies_for_role(data['selected_role'])
-        if selected_comp not in valid_comps:
-            await message.answer(
-                "Пожалуйста, выберите компетенцию из предложенного списка:",
-                reply_markup=await build_competencies_keyboard(data['selected_role'])
-            )
+
+        if not message.text:
+            await message.answer("Не удалось выбрать компетенцию")
             return
+
+        # If input is a number, try to get competency by index
+        if message.text.strip().isdigit():
+            comp_index = int(message.text.strip()) - 1
+            if 0 <= comp_index < len(valid_comps):
+                selected_comp = valid_comps[comp_index]
+            else:
+                comps_list = "\n".join(
+                    f"{i+1}. {comp}" for i, comp in enumerate(valid_comps)
+                )
+                await message.answer(
+                    f"Пожалуйста, выберите компетенцию из списка, введя соответствующее число:\n\n"
+                    f"{comps_list}"
+                )
+                return
+        else:
+            # Original text-based selection
+            selected_comp = message.text.strip()
+            if selected_comp not in valid_comps:
+                comps_list = "\n".join(
+                    f"{i+1}. {comp}" for i, comp in enumerate(valid_comps)
+                )
+                await message.answer(
+                    f"Пожалуйста, выберите компетенцию из списка, введя соответствующее число:\n\n"
+                    f"{comps_list}"
+                )
+                return
 
         test_data = await prepare_test_data(data['selected_role'], selected_comp)
 
@@ -492,7 +543,7 @@ async def handle_case_presentation(message: types.Message, state: FSMContext):
     case_msg = (
         "<b>Сценарный кейс</b>\n\n"
         f"<i>Ситуация:</i> {case.situation}\n\n"
-        f"<i>Задача:</i> {case.case_task}\n\n"
+        f"<i>Задача:</i>\n{case.case_task}\n\n"
         "<i>Пожалуйста, предложите ваше решение:</i>"
     )
 
