@@ -1,3 +1,4 @@
+version: '3.3'
 services:
   postgres:
     container_name: {{ hostvars[inventory_hostname].group_names[0] }}_postgres
@@ -13,7 +14,6 @@ services:
       interval: 30s
       timeout: 60s
       retries: 5
-      start_period: 80s
     restart: unless-stopped
     ports:
       - "${DB_PORT}:5432"
@@ -112,8 +112,5 @@ services:
 
 volumes:
   {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data:
-    name: {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data
   {{ hostvars[inventory_hostname].group_names[0] }}_redis_data:
-    name: {{ hostvars[inventory_hostname].group_names[0] }}_redis_data
   {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:
-    name: {{ hostvars[inventory_hostname].group_names[0] }}_minio_data
