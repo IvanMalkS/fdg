@@ -1,2 +1,0 @@
-[services]
-ansible_python_interpreter=/usr/bin/python3 ansible_tfs_cd_user=tfs_cd_user   ansible_host=10.80.23.35

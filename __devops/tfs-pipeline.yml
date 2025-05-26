@@ -31,16 +31,14 @@ stages:
   pool:
     name: SharedGit
   jobs:
-    - job: Deploy
-      displayName: Deploy
+    - job: Deploy on dev
+      displayName: Deploy on dev
       steps:
         - script: |
             docker run -w /deploy/ansible -v $(pwd)/__devops:/deploy \
             harbor.parmalogica.ru/base/python/ansible/k8s:3.12-alpine3.18-v1.0.1 \
-            ansible-playbook -i inventory/test.hosts \
+            ansible-playbook -i inventory/hosts -l dev \
             deploy-pipeline.yaml \
-            -e "directory=$(Build.Repository.LocalPath) \
-                  build_id=$(Build.BuildId) \
-                  ansible_sudo_pass=$(pass_tfs_cd_user) \
-                  ansible_password=$(pass_tfs_cd_user) \ 
-                  directory=$(Agent.BuildDirectory)"
+            -e "build_id=$(Build.BuildId) \
+                ansible_sudo_pass=$(pass_tfs_cd_user) \
+                ansible_password=$(pass_tfs_cd_user)"

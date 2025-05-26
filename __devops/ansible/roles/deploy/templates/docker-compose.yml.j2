@@ -59,9 +59,7 @@ services:
 
   tg_bot:
     container_name: ${CONTAINER_NAME}_tg_bot
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: harbor.parmalogica.ru/sharedgit/tg_bot:{{ build_id }}
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
