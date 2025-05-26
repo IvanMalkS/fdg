@@ -1,6 +1,6 @@
 services:
   postgres:
-    container_name: {{ group_names }}_postgres
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_postgres
     image: postgres:16.4-alpine
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -20,7 +20,7 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    container_name: {{ group_names }}_redis
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_redis
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_USER=${REDIS_USER}
@@ -58,7 +58,7 @@ services:
     stdin_open: true
 
   tg_bot:
-    container_name: {{ group_names }}_tg_bot
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_tg_bot
     image: harbor.parmalogica.ru/sharedgit/tg_bot:{{ build_id }}
     environment:
       DB_USER: ${DB_USER}
@@ -92,7 +92,7 @@ services:
     restart: unless-stopped
 
   minio:
-    container_name: {{ group_names }}_minio
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_minio
     image: minio/minio:latest
     restart: unless-stopped
     ports:
@@ -112,8 +112,8 @@ services:
 
 volumes:
   postgres_data:
-    name: {{ group_names }}_postgres_data
+    name: {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data
   redis_data:
-    name: {{ group_names }}_redis_data
+    name: {{ hostvars[inventory_hostname].group_names[0] }}_redis_data
   minio_data:
-    name: {{ group_names }}_minio_data
+    name: {{ hostvars[inventory_hostname].group_names[0] }}_minio_data
