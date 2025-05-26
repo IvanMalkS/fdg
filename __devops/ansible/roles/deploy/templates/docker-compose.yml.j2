@@ -57,6 +57,25 @@ services:
     tty: true
     stdin_open: true
 
+  minio:
+    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_minio
+    image: minio/minio:latest
+    restart: unless-stopped
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_ADMIN_PORT}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:/data
+
   tg_bot:
     container_name: {{ hostvars[inventory_hostname].group_names[0] }}_tg_bot
     image: harbor.parmalogica.ru/sharedgit/tg_bot:{{ build_id }}
@@ -83,32 +102,10 @@ services:
       SECURE: ${SECURE}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+      - postgres
+      - redis
+      - minio
     restart: unless-stopped
-
-  minio:
-    container_name: {{ hostvars[inventory_hostname].group_names[0] }}_minio
-    image: minio/minio:latest
-    restart: unless-stopped
-    ports:
-      - "${MINIO_PORT}:9000"
-      - "${MINIO_ADMIN_PORT}:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:/data
 
 volumes:
   {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data:
