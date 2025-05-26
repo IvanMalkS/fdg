@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - {{ hostvars[inventory_hostname].group_names[0] }}_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-U", "${DB_USER}", "-d", "${DB_NAME}"]
       interval: 30s
@@ -28,7 +28,7 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
     volumes:
-      - redis_data:/data
+      - {{ hostvars[inventory_hostname].group_names[0] }}_redis_data:/data
     deploy:
       resources:
         limits:
@@ -108,7 +108,7 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - minio_data:/data
+      - {{ hostvars[inventory_hostname].group_names[0] }}_minio_data:/data
 
 volumes:
   postgres_data:
