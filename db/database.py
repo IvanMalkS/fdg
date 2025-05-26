@@ -9,7 +9,6 @@ from db.base import Base
 from config import Config
 
 def get_db_url():
-    """Формирует URL для подключения к PostgreSQL (асинхронный)."""
     return (
         f"postgresql+asyncpg://"
         f"{Config.DB_USER}:{Config.DB_PASSWORD}@"
@@ -17,15 +16,12 @@ def get_db_url():
         f"{Config.DB_NAME}"
     )
 
-
 engine = create_async_engine(get_db_url())
 
-
 async def init_db():
-    """Инициализирует БД и создаёт таблицы асинхронно."""
     async with engine.begin() as conn:
         if Config.DROP_DB_ON_STARTUP:
-            logger.info("Производится очистка БД")
+            logger.info("Clear DB")
             await conn.run_sync(Base.metadata.drop_all)
 
         await conn.run_sync(Base.metadata.create_all)
@@ -34,19 +30,18 @@ async def init_db():
             lambda sync_conn: inspect(sync_conn).get_table_names()
         )
 
-        logger.info(f"Таблицы {', '.join(tables)} созданы")
+        logger.info(f"Tables {', '.join(tables)} created")
 
     await load_data_from_excel()
 
     async_session = async_sessionmaker(engine, expire_on_commit=False)
     async with async_session() as session:
         await create_defaults_settings(session)
-    logger.info("Базы данных созданы и заполнены")
+    logger.info("PG DB started successfully")
     return engine
 
 
 async def load_data_from_excel():
-    """Загружает данные DAMA из Excel в PostgreSQL асинхронно."""
     try:
         excel_dir = os.path.join(os.getcwd(), 'excel')
         dfs = {
@@ -70,14 +65,13 @@ async def load_data_from_excel():
                     )
                 )
 
-        logger.info("Данные успешно загружены из Excel")
+        logger.info("Data load from EXCEL")
     except Exception as e:
-        logger.error(f"Ошибка загрузки данных: {e}")
+        logger.error(f"Error while loading from EXCEL: {e}")
         raise
 
 
 async def load_new_provider(creator: str, token: str, url: str):
-    """Создаёт выбор новой нейросети"""
     try:
         async_session = get_async_session()
 
@@ -91,14 +85,13 @@ async def load_new_provider(creator: str, token: str, url: str):
                 if not ai_creator:
                     new_creator = AiCreators(name=creator, token=token, url=url)
                     session.add(new_creator)
-                    logger.info(f"Добавлен новый проводник {creator}")
+                    logger.info(f"Created new provider {creator}")
 
     except Exception as e:
-        logger.error(f"Ошибка при добавлении {creator}: {e}")
+        logger.error(f"Error while creation new provider {creator}: {e}")
 
 
 async def load_models(models_link: str, token: str, creator_id: int):
-    """Асинхронно загружает модели от создателя"""
     try:
         headers = {
             "Authorization": f"Bearer {token}",
@@ -109,19 +102,19 @@ async def load_models(models_link: str, token: str, creator_id: int):
             async with http_session.get(models_link, headers=headers) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error(f"Ошибка получения моделей: {response.status} - {error_text}")
+                    logger.error(f"Error while load models: {response.status} - {error_text}")
                     raise Exception(f"API error {response.status}: {error_text}")
 
                 data = await response.json()
 
                 if "data" not in data:
-                    logger.error(f"Неверный формат ответа API: ключ 'data' отсутствует. Полный ответ: {data}")
-                    return False
+                    logger.error(f"Invalid API response format: {data}")
+                    raise Exception("Invalid API response format")
 
                 models = data["data"]
                 if not models:
                     logger.info(data)
-                    logger.warning("Получен пустой список моделей")
+                    logger.warning("Empty models list")
                     return False
 
         async_session = async_sessionmaker(engine, expire_on_commit=False)
@@ -151,15 +144,24 @@ async def load_models(models_link: str, token: str, creator_id: int):
                     added_models += 1
 
                 await session.commit()
-                logger.info(f'Добавлено {added_models} моделей для {creator.name}')
+                logger.info(f'Loaded {added_models} models for {creator.name}')
                 return added_models > 0
 
     except Exception as e:
-        logger.error(f"Ошибка при загрузке моделей: {str(e)}", exc_info=True)
+        logger.error(f"Error while load models: {str(e)}", exc_info=True)
+        
+        async_session = async_sessionmaker(engine, expire_on_commit=False)
+        async with async_session() as session:
+            async with session.begin():
+                creator = await session.get(AiCreators, creator_id)
+                if creator:
+                    await session.delete(creator)
+                    await session.commit()
+                    logger.info(f'Provider {creator.name} have not models')
+        
         return False
 
 def get_async_session():
-    """Возвращает новую асинхронную сессию"""
     return async_sessionmaker(engine, expire_on_commit=False)()
 
 async def get_selected_ai_creator():
@@ -179,7 +181,6 @@ async def get_selected_ai_creator():
         return None
 
 async def create_defaults_settings(session):
-    """Создаёт дефолтную запись настроек, если её нет"""
     result = await session.execute(select(AiSettings))
     settings = result.scalars().first()
     if not settings:

@@ -78,7 +78,16 @@ async def generate_test_report(user_id: int):
     total_prompt_tokens = 0
     total_completion_tokens = 0
 
+    filtered_answers = []
+    
     for answer in answers:
+        if not answer.get('user_answer'):
+            logger.warning(f"Skipping answer with empty text: {answer}")
+            continue
+
+        filtered_answers.append(answer)
+
+    for answer in filtered_answers:
         try:
             score = float(answer.get('score', 0)) if isinstance(answer, dict) else 0
             total_score += score
@@ -110,12 +119,8 @@ async def generate_test_report(user_id: int):
             )
             test_result_id = result.scalar_one()
 
-            for answer in answers:
+            for answer in filtered_answers:
                 logger.debug(f"Answer: {answer}")
-
-                if not answer.get('user_answer'):
-                    logger.warning(f"Skipping answer with empty text: {answer}")
-                    continue
 
                 answer_data = {
                     'test_result_id': test_result_id,
@@ -209,10 +214,7 @@ async def generate_test_report(user_id: int):
                 cell.alignment = center_alignment
                 cell.border = thin_border
 
-    for answer in answers:
-        if not answer.get('user_answer'):
-            continue
-
+    for answer in filtered_answers:
         feedback = answer.get('feedback', {})
         recommendations = feedback.get('recommendations', '')
         if isinstance(recommendations, list):

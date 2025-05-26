@@ -13,7 +13,7 @@ def setup_handlers(dp: Dispatcher) -> None:
     dp.include_router(admin_router)
 
 async def init_bot() -> None:
-    """Инициализация и запуск бота"""
+    """Initialize bot"""
     bot = Bot(token=Config.TELEGRAM_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     
     storage = await state_storage.get_storage()

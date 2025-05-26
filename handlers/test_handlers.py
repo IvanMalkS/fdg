@@ -53,7 +53,19 @@ async def start_test(message: types.Message, state: FSMContext, **kwargs):
     if message and message.from_user and await is_user_banned(message.from_user.id):
         await message.answer("Вы заблокированы и не можете использовать бота.")
         return
-        
+    
+    ai_model_name = await redis_service.load_selected_ai_model()
+    ai_token = await redis_service.load_openai_token()
+    ai_url = await redis_service.load_selected_url()
+            
+    if not ai_model_name or not ai_token or not ai_url:
+        await message.answer(
+                "Не установлена модель для тестирования, "
+                "пожалуйста свяжитесь с администратором!"
+            )
+        logger.error("Test model not selected")
+        return
+
     await state.set_state(TestStates.waiting_for_name)
     await message.answer(
         "Добро пожаловать в тестирование компетенций DAMA!\n\n"
@@ -80,7 +92,8 @@ async def process_name(message: types.Message, state: FSMContext, **kwargs):
     await redis_service.save_user_metadata(message.from_user.id, {'user_name': user_name})
 
     await message.answer(
-        "Выберите вашу роль DAMA из списка ниже:",
+        "Выберите вашу роль DAMA из списка ниже: ⬇️\n\n"
+        "Пожалуйста, нажмите на соответствующую кнопку:",
         reply_markup=await build_roles_keyboard()
     )
 
@@ -291,30 +304,6 @@ async def process_answer(message: types.Message, state: FSMContext, **kwargs):
             question_id=current_idx
         )
 
-
-        if analysis.get('needs_clarification', False) and data.get('clarification_count', 0) < 2:
-            clarification_prompt = (
-                f"Пользователь ответил на вопрос '{current_question.question}' следующим образом:\n\n"
-                f"{message.text}\n\n"
-                f"Уточняющий вопрос: {analysis['clarification_question']}\n\n"
-                "Пожалуйста, дайте более развернутый ответ, учитывая предыдущее сообщение."
-            )
-
-            await state.update_data({
-                'question_id': current_question.id,
-                'awaiting_clarification': True,
-                'clarification_question': clarification_prompt,
-                'previous_feedback': analysis,
-                'previous_answer': message.text,
-                'clarification_count': data.get('clarification_count', 0) + 1
-            })
-
-            await message.answer(
-                analysis['clarification_question'],
-                parse_mode="HTML"
-            )
-            return
-
         answer_data = {
             'question_id': current_question.id,
             'question': current_question.question,
@@ -332,6 +321,31 @@ async def process_answer(message: types.Message, state: FSMContext, **kwargs):
             'timestamp': datetime.now().isoformat(),
             'clarification_used': data.get('clarification_count', 0) > 0
         }
+
+
+        if analysis.get('needs_clarification', False) and data.get('clarification_count', 0) < 2:
+            clarification_prompt = (
+                f"Пользователь ответил на вопрос '{current_question.question}' следующим образом:\n\n"
+                f"{message.text}\n\n"
+                f"Уточняющий вопрос: {analysis['clarification_question']}\n\n"
+                "Пожалуйста, дайте более развернутый ответ, учитывая предыдущее сообщение."
+            )
+
+            await state.update_data({
+                'question_id': current_question.id,
+                'awaiting_clarification': True,
+                'clarification_question': clarification_prompt,
+                'answers': data['answers'] + [answer_data],
+                'previous_feedback': analysis,
+                'previous_answer': message.text,
+                'clarification_count': data.get('clarification_count', 0) + 1
+            })
+
+            await message.answer(
+                analysis['clarification_question'],
+                parse_mode="HTML"
+            )
+            return
 
         await redis_service.save_answers_to_redis(
             user_id=user_id,
@@ -375,6 +389,9 @@ async def handle_clarification_response(message: types.Message, state: FSMContex
 
     try:
         current_question = _deserialize_question(questions[current_idx])
+        answers = data.get('answers', [])
+        prev_answer = answers[-1] if answers else None 
+        
         context = (
             f"Исходный вопрос: {current_question.question}\n"
             f"Первый ответ пользователя: {data['previous_answer']}\n"
@@ -388,25 +405,34 @@ async def handle_clarification_response(message: types.Message, state: FSMContex
             role=data['selected_role'],
             competence=data['selected_comp'],
             user_id=user_id,
-            question_id=current_idx
+            question_id=current_idx,
+            prev_answer=data['previous_answer'] if data.get('previous_answer') else None
         )
 
-        prev_answer = data['answers'][-1] if data['answers'] else None
         if prev_answer:
-            prev_answer['question_id'] = current_question.id
-            combined_answer = f"{prev_answer['user_answer']}\n\nДополнение: {message.text}"
-            prev_answer['user_answer'] = combined_answer
-            prev_answer['score'] = (prev_answer.get('score', 0) + analysis['score']) / 2
-            prev_answer['feedback']['strengths'].extend(analysis['strengths'])
-            prev_answer['feedback']['weaknesses'].extend(analysis['weaknesses'])
-            prev_answer['feedback']['recommendations'].extend(analysis['recommendations'])
-            prev_answer['clarification_response'] = message.text
-            prev_answer['is_clarified'] = True
+            updated_answer = {
+                'question_id': current_question.id,
+                'question': prev_answer.get('question', ''),
+                'user_answer': f"{prev_answer.get('user_answer', '')}\n\nДополнение: {message.text}",
+                'correct_answer': prev_answer.get('correct_answer', ''),
+                'score': (prev_answer.get('score', 0) + analysis['score']) / 2,
+                'feedback': {
+                    'strengths': prev_answer.get('feedback', {}).get('strengths', []) + analysis['strengths'],
+                    'weaknesses': prev_answer.get('feedback', {}).get('weaknesses', []) + analysis['weaknesses'],
+                    'recommendations': prev_answer.get('feedback', {}).get('recommendations', []) + analysis['recommendations']
+                },
+                'knowledge_area': prev_answer.get('knowledge_area', ''),
+                'main_job': prev_answer.get('main_job', ''),
+                'question_type': prev_answer.get('question_type', ''),
+                'timestamp': datetime.now().isoformat(),
+                'clarification_response': message.text,
+                'is_clarified': True
+            }
 
             await redis_service.save_answers_to_redis(
                 user_id=user_id,
                 question_id=current_idx,
-                data=prev_answer
+                data=updated_answer
             )
 
         new_data = {
@@ -542,11 +568,16 @@ async def generate_report(message: types.Message, user_id: int, state: FSMContex
     """Генерация отчета и загрузка в MinIO"""
     minio_service = MinioService()
 
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    user_meta = await redis_service.get_user_metadata(user_id)
+    
     try:
         report = await generate_test_report(user_id)
-
         if not report:
             raise ValueError("Не удалось сгенерировать отчет")
+
+        safe_name = "".join(c for c in user_meta.get('user_name', 'user') if c.isalnum() or c in (' ', '_')).rstrip()
+        download_file_name = f"DAMA_Report_{safe_name}_{timestamp}.xlsx"
 
         success, filename = await minio_service.upload_report(
             user_id=user_id,
@@ -556,50 +587,35 @@ async def generate_report(message: types.Message, user_id: int, state: FSMContex
         if not success:
             raise ValueError("Не удалось загрузить отчет в хранилище")
 
-        download_url = await minio_service.get_report_url(filename)
-
-        if not download_url:
-            raise ValueError("Не удалось получить ссылку для скачивания")
-
-        result_msg = (
-            "<b>Тестирование завершено!</b>\n\n"
-            f"<b>Средний балл:</b> {report['avg_score']:.2f}\n"
-            f"<b>Уровень эксперта:</b> {'достигнут' if report['is_expert'] else 'не достигнут'}\n\n"
-            f"Скачать полный отчет:\n"
-            f"{download_url}\n\n"
-            "Выберите действие:"
-        )
-
-        await message.answer(
-            result_msg,
-            reply_markup=build_start_buttons(),
-            parse_mode="HTML",
-            disable_web_page_preview=True
-        )
-
-    except Exception as e:
-        logger.error(f"Ошибка при генерации отчета: {e}")
-        user_meta = await redis_service.get_user_metadata(user_id)
-        report = await generate_test_report(user_id)
-        # Fallback - отправка файла напрямую, если MinIO не работает
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        fallback_filename = f"DAMA_Report_{user_meta.get('user_name')}_{timestamp}.xlsx"
         excel_file = types.BufferedInputFile(
             report['excel_file'].getvalue(),
-            filename=fallback_filename
+            filename=download_file_name
         )
-
 
         await message.answer_document(
             excel_file,
             caption="Ваш отчет об оценке компетенций DAMA"
         )
 
+        result_msg = (
+            "<b>Тестирование завершено!</b>\n\n"
+            f"<b>Средний балл:</b> {report['avg_score']:.2f}\n"
+            f"<b>Уровень эксперта:</b> {'достигнут' if report['is_expert'] else 'не достигнут'}\n\n"
+            "Выберите действие:"
+        )
+
         await message.answer(
-            "Произошла ошибка при загрузке в облачное хранилище. Отчет отправлен напрямую.",
+            result_msg,
             reply_markup=build_start_buttons()
         )
 
+    except Exception as e:
+        logger.error(f"Ошибка при генерации отчета: {e}")
+        await message.answer(
+            "Произошла ошибка при загрузке в облачное хранилище.\n"
+            "Пожалуйста передайте результаты тестирования администратору!",
+            reply_markup=build_start_buttons()
+        )
     finally:
         await redis_service.clear_user_answers(user_id)
         await redis_service.clear_user_metadata(user_id)
@@ -611,8 +627,20 @@ def format_feedback(analysis: dict, is_case: bool = False) -> str:
     question_type = "кейса" if is_case else "вопроса"
     strengths = "\n".join([f"• {s}" for s in analysis.get('strengths', [])])
     recommendations = "\n".join([f"• {r}" for r in analysis.get('recommendations', [])])
+    weaknesses = "\n".join([f"• {w}" for w in analysis.get('weaknesses', [])])
 
-    return (
-        f"<b>Ваш ответ на {question_type} оценен на {analysis['score']:.1f}/5.0</b>\n\n"
-        f"<i>Сильные стороны:</i>\n{strengths}\n\n"
-        f"<i>Рекомендации:</i>\n{recommendations}"    )
+    feedback_parts = [
+        f"<b>Ваш ответ на {question_type} оценен на {analysis['score']:.1f}/5.0</b>"
+    ]
+    
+    if analysis.get('strengths'):
+        feedback_parts.append(f"\n\n<i>Сильные стороны:</i>\n{strengths}")
+    
+    if analysis.get('weaknesses'):
+        feedback_parts.append(f"\n\n<i>Пробелы:</i>\n{weaknesses}")
+    
+
+    if analysis.get('recommendations'):
+        feedback_parts.append(f"\n\n<i>Рекомендации:</i>\n{recommendations}")
+
+    return "".join(feedback_parts)
