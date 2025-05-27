@@ -5,7 +5,7 @@ from sqlalchemy.future import select
 from sqlalchemy import update
 from aiogram.types import Message, InaccessibleMessage
 from config import Config
-from db.models import AiCreators, Models, AiSettings, User
+from db.models import AiCreators, Models, AiSettings, User, TestResults
 from db.database import get_async_session, load_models
 from handlers.states import AdminStates
 from services.keyboard import build_ai_creators_keyboard, build_admin_keyboard, build_model_choice_keyboard, \
@@ -15,9 +15,11 @@ from services.logger import logger
 from db.enums import UserRole
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from services.user_utils import is_user_banned
+from services.minio_service import MinioService
 
 admin_router = Router()
 redis_service = RedisService()
+minio_service = MinioService()
 
 @admin_router.message(F.text == "Админ")
 async def admin_panel(message: Message, state: FSMContext):
@@ -208,7 +210,7 @@ async def select_model(callback: CallbackQuery, state: FSMContext):
     async with get_async_session() as session:
         model_result = await session.execute(
             select(Models).where(Models.id == model_id))
-        model: Models = model_result.scalars().first()  # Add type hint
+        model: Models = model_result.scalars().first()
 
         if not model:
             await callback.message.edit_text("Модель не найдена")
@@ -256,13 +258,11 @@ async def select_model(callback: CallbackQuery, state: FSMContext):
         )
     await callback.answer()
 
-
 @admin_router.message(F.text == "Добавить нового провайдера")
 async def add_new_creator_start(message: Message, state: FSMContext):
     """Начало добавления нового провайдера"""
     await state.set_state(AdminStates.creator_name)
     await message.answer("Введите название нового AI провайдера:")
-
 
 @admin_router.message(AdminStates.creator_name)
 async def process_creator_name(message: Message, state: FSMContext):
@@ -270,7 +270,6 @@ async def process_creator_name(message: Message, state: FSMContext):
     await state.update_data(creator_name=message.text)
     await state.set_state(AdminStates.creator_token)
     await message.answer("Введите API токен для этого провайдера:\n После ввода он удалиться")
-
 
 @admin_router.message(AdminStates.creator_token)
 async def process_creator_token(message: Message, state: FSMContext):
@@ -286,7 +285,6 @@ async def process_creator_token(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка при удалении сообщения с токеном: {e}")
         await message.answer("Произошла ошибка при обработке токена. Пожалуйста, попробуйте еще раз.")
-
 
 @admin_router.message(AdminStates.creator_url)
 async def process_creator_url(message: Message, state: FSMContext):
@@ -317,7 +315,6 @@ async def process_creator_url(message: Message, state: FSMContext):
             "Теперь введите URL для загрузки моделей от этого провайдера:\n"
             "Пример: https://generativelanguage.googleapis.com/v1beta/openai/models"
         )
-
 
 @admin_router.message(AdminStates.models_url)
 async def process_models_url(message: Message, state: FSMContext):
@@ -424,7 +421,6 @@ async def process_temperature_update(message: Message, state: FSMContext):
             await message.answer("Настройки не найдены")
 
     await state.clear()
-
 
 @admin_router.message(F.text == "Изменить промпт")
 async def change_prompt_start(message: Message, state: FSMContext):
@@ -609,7 +605,6 @@ async def handle_select_user(callback: CallbackQuery, state: FSMContext):
             
             await callback.answer("Пользователь теперь администратор", show_alert=True)
             
-            
             current_state = await state.get_state()
             if current_state == AdminStates.users_list:
                 if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -631,3 +626,75 @@ async def handle_back_to_admin(callback: CallbackQuery, state: FSMContext):
     else:
         logger.error("Cannot access message in handle_back_to_admin")
         await callback.answer("Не возможно вернуться в панель", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("user_info:"))
+async def handle_user_info(callback: CallbackQuery, state: FSMContext):
+    """Show user test results and details"""
+    try:
+        if not callback.data:
+            await callback.answer("Нет данных")
+            return
+            
+        user_id = int(callback.data.split(":")[1])
+        
+        async with get_async_session() as session:
+            user_result = await session.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = user_result.scalars().first()
+            
+            if not user:
+                await callback.answer("Пользователь не найден", show_alert=True)
+                return
+            
+            test_results_query = await session.execute(
+                select(TestResults)
+                .where(TestResults.user_id == user_id)
+                .order_by(TestResults.test_date.desc())
+            )
+            test_results = test_results_query.scalars().all()
+            
+            if not test_results:
+                await callback.answer(
+                    f"Пользователь  {user.username or user.id} не имеет результатов тестирования", 
+                    show_alert=True
+                )
+                return
+
+            avg_score = sum(r.total_score for r in test_results) / len(test_results)
+
+            message_text = (
+                f"👤 Пользователь: {user.username or user.first_name + ' ' + user.last_name}\n"
+                f"📊 Средняя оценка: {avg_score:.2f}\n"
+                f"📝 Всего тестов: {len(test_results)}\n\n"
+                "Последние результаты тестов:\n"
+            )
+            
+            for i, result in enumerate(test_results[:5]): 
+                s3_link = await minio_service.get_report_url(result.report_path) 
+                
+                report_link_text = s3_link if s3_link else "Ссылка недоступна"
+    
+                message_text += (
+                    f"{i+1}) Тест\n"
+                    f"Роль: {result.dama_role}\n"
+                    f"Компетенция: {result.dama_competence}\n"
+                    f"Оценка: {result.total_score}\n"
+                    f"Дата проведения: {result.test_date.strftime('%Y-%m-%d %H:%M')}\n" # Formatted date
+                    f"Отчет: {report_link_text}\n\n"
+                )
+
+            if not callback.message:
+                logger.error("Callback not defined")
+                return
+
+            await callback.message.answer(
+                message_text,
+                parse_mode=None
+            )
+            
+    except Exception as e:
+        logger.error(f"Error showing user details: {e}")
+        await callback.answer("Ошибка при отображении результатов пользователя", show_alert=True)
+    finally:
+        await callback.answer()

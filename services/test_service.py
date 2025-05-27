@@ -267,7 +267,7 @@ async def get_available_roles():
             roles = result.scalars().all()
             return sorted(roles) if roles else []
     except Exception as e:
-        logger.error(f"Ошибка при получении списка ролей: {e}")
+        logger.error(f"Error while getting roles: {e}")
         return []
 
 async def get_competencies_for_role(role: str):
@@ -285,5 +285,5 @@ async def get_competencies_for_role(role: str):
             competencies = result.scalars().all()
             return sorted(competencies) if competencies else []
     except Exception as e:
-        logger.error(f"Ошибка при получении компетенций для роли {role}: {e}")
+        logger.error(f"Error while getting competencies {role}: {e}")
         return []

@@ -25,9 +25,9 @@ class MinioService:
         try:
             if not self.client.bucket_exists(self.bucket_name):
                 self.client.make_bucket(self.bucket_name)
-                logger.info(f"Бакет '{self.bucket_name}' создан")
+                logger.info(f"Bucket '{self.bucket_name}' create")
         except S3Error as e:
-            logger.error(f"Не удалось создать бакет: {e}")
+            logger.error(f"Error while creating bucket: {e}")
             raise
 
     def _make_bucket_public(self):
@@ -46,9 +46,9 @@ class MinioService:
             }
             import json
             self.client.set_bucket_policy(self.bucket_name, json.dumps(policy))
-            logger.info(f"Бакет '{self.bucket_name}' теперь публичный (read-only)")
+            logger.info(f"Bucker '{self.bucket_name}' now public (read-only)")
         except S3Error as e:
-            logger.error(f"Не удалось сделать бакет публичным: {e}")
+            logger.error(f"Error while making public: {e}")
 
     async def upload_report(self, user_id: int, file_data: BytesIO, file_extension: str = "xlsx") -> Tuple[bool, str]:
         try:
@@ -74,7 +74,7 @@ class MinioService:
 
             return True, filename
         except S3Error as e:
-            logger.error(f"Проблема с отправкой файла: {e}")
+            logger.error(f"Error while sending file: {e}")
             return False, str(e)
 
     async def get_report_url(self, filename: str) -> Optional[str]:
@@ -82,7 +82,7 @@ class MinioService:
             protocol = "https" if Config.SECURE else "http"
             return f"{protocol}://{Config.MINIO_HOST}:{Config.MINIO_PORT}/{self.bucket_name}/{filename}"
         except Exception as e:
-            logger.error(f"Ошибка при построении URL: {e}")
+            logger.error(f"Error while creating url: {e}")
             return None
 
     async def delete_report(self, filename: str) -> bool:
@@ -90,5 +90,5 @@ class MinioService:
             self.client.remove_object(self.bucket_name, filename)
             return True
         except S3Error as e:
-            logger.error(f"Произошла ошибка при удалении файла: {e}")
+            logger.error(f"Error while deleting file: {e}")
             return False

@@ -55,5 +55,5 @@ async def cmd_start(message: types.Message, state: FSMContext):
             )
         except Exception as e:
             await session.rollback()
-            logger.error(f"Ошибка при сохранении пользователя: {e}")
+            logger.error(f"Error while saving data: {e}")
             await message.answer("Произошла ошибка при сохранении данных.")
