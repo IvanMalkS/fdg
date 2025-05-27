@@ -12,11 +12,10 @@ class User(Base):
     __tablename__ = 'dama_users'
     
     id = Column(BigInteger, primary_key=True)
-    role = Column(String, default=UserRole.USER)
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=False)
     username = Column(String(255), nullable=False)
-    role = Column(String(255), nullable=False, default='user')
+    role = Column(String(255), nullable=False, default=UserRole.USER)
     test_results = relationship("TestResults", back_populates="user")
 
     __table_args__ = (
@@ -35,6 +34,7 @@ class TestResults(Base):
     total_score = Column(Float, nullable=False)
     is_expert = Column(Boolean, nullable=False)
     test_date = Column(DateTime, default=datetime.utcnow)
+    report_path: Mapped[str] = mapped_column(String, nullable=True) # Add this line
 
     user = relationship("User", back_populates="test_results")
     answers = relationship("TestAnswer", back_populates="test_result")

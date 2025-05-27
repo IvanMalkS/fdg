@@ -7,14 +7,15 @@ from services.logger import logger
 from services.minio_service import MinioService
 from services.test_service import prepare_test_data, generate_test_report, get_competencies_for_role, \
     get_available_roles
-from services.keyboard import build_roles_keyboard, build_competencies_keyboard, build_start_test_keyboard, \
-    build_start_buttons
+from services.keyboard import build_start_test_keyboard, build_start_buttons
 from handlers.states import TestStates, MainMenuStates
 from services.redis_service import RedisService
-from db.models import DAMAQuestion, DAMACase
+from db.models import DAMAQuestion, DAMACase, TestResults
 from services.state_service import state_storage
 from typing import Dict, Any, Callable, Coroutine
 from services.user_utils import is_user_banned
+from db.database import get_async_session
+from sqlalchemy import update
 
 test_router = Router()
 
@@ -637,6 +638,16 @@ async def generate_report(message: types.Message, user_id: int, state: FSMContex
 
         if not success:
             raise ValueError("Не удалось загрузить отчет в хранилище")
+
+        async with get_async_session() as session:
+            update_stmt = update(TestResults).where(
+                TestResults.user_id == user_id
+            ).values(report_path=filename)
+            
+            await session.execute(update_stmt)
+            await session.commit()
+            logger.info(f"Saved test result for user {user_id} with report path {filename}")
+
 
         excel_file = types.BufferedInputFile(
             report['excel_file'].getvalue(),
