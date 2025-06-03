@@ -1,7 +1,7 @@
 
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
-from aiogram.types import Message, TelegramObject
+from aiogram.types import Message, CallbackQuery, TelegramObject
 from sqlalchemy import select
 from db.database import get_async_session
 from db.models import User
@@ -18,6 +18,8 @@ class BanCheckMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        user_id = None
+        
         if isinstance(event, Message) and event.from_user:
             user_id = event.from_user.id
             
@@ -25,10 +27,16 @@ class BanCheckMiddleware(BaseMiddleware):
             # чтобы они могли получить уведомление о бане
             if event.text and event.text.startswith('/start'):
                 return await handler(event, data)
+                
+        elif isinstance(event, CallbackQuery) and event.from_user:
+            user_id = event.from_user.id
             
-            if await self.is_user_banned(user_id):
+        if user_id and await self.is_user_banned(user_id):
+            if isinstance(event, Message):
                 await event.answer("Вы заблокированы и не можете использовать бота.")
-                return
+            elif isinstance(event, CallbackQuery):
+                await event.answer("Вы заблокированы и не можете использовать бота.", show_alert=True)
+            return
         
         return await handler(event, data)
     

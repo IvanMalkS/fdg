@@ -22,6 +22,7 @@ async def init_bot() -> None:
 
     # Setup middleware
     dp.message.middleware(BanCheckMiddleware())
+    dp.callback_query.middleware(BanCheckMiddleware())
 
     setup_handlers(dp)
 
