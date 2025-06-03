@@ -1,0 +1,9 @@
+modules = ["python-3.12"]
+run = "poetry run python main.py"
+
+[nix]
+channel = "stable-24_05"
+packages = ["glibcLocales", "postgresql"]
+
+[deployment]
+run = ["sh", "-c", "poetry run python main.py"]
