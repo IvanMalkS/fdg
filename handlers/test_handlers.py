@@ -51,7 +51,7 @@ def _deserialize_case(data: Dict[str, Any]) -> DAMACase:
 @handle_errors("Произошла ошибка при запуске теста.")
 async def start_test(message: types.Message, state: FSMContext, **kwargs):
     """Начало тестирования - запрос ФИО"""
-    if message and message.from_user and await is_user_banned(message.from_user.id):
+    if message and message.from_user:
         await message.answer("Вы заблокированы и не можете использовать бота.")
         return
     
