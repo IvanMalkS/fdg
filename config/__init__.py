@@ -4,12 +4,16 @@ from .settings import settings, AppSettings, load_settings
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from config import Config
+# Add the parent directory to sys.path to access root config.py
+root_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, root_dir)
+
+# Import from the root config.py file explicitly
+import config as root_config
+Config = root_config.Config
 
 
 def get_config():
-  from config import Config
   return Config
 
 

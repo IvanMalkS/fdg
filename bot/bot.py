@@ -16,8 +16,6 @@ def setup_handlers(dp: Dispatcher) -> None:
 
 async def init_bot() -> None:
     """Initialize bot"""
-    from config import get_config
-    config = get_config()()
     bot = Bot(token=Config.TELEGRAM_TOKEN,
               default=DefaultBotProperties(parse_mode="HTML"))
 
