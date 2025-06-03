@@ -14,34 +14,32 @@ from sqlalchemy.future import select
 from db.database import get_async_session
 from db.models import DMARoles, DAMACompetency
 
+
 async def prepare_test_data(selected_role: str, selected_comp: str):
     async with get_async_session() as session:
         try:
             theory_query = select(DAMAQuestion).where(
                 DAMAQuestion.dama_role_name == selected_role,
                 DAMAQuestion.dama_competence_name == selected_comp,
-                DAMAQuestion.question_type == "Теория"
-            ).distinct()
+                DAMAQuestion.question_type == "Теория").distinct()
             theory_result = await session.execute(theory_query)
             theory_questions = theory_result.scalars().all()
 
             practice_query = select(DAMAQuestion).where(
                 DAMAQuestion.dama_role_name == selected_role,
                 DAMAQuestion.dama_competence_name == selected_comp,
-                DAMAQuestion.question_type == "Практика"
-            ).distinct()
+                DAMAQuestion.question_type == "Практика").distinct()
             practice_result = await session.execute(practice_query)
             practice_questions = practice_result.scalars().all()
 
-
             case_query = select(DAMACase).where(
                 DAMACase.dama_role_name == selected_role,
-                DAMACase.dama_competence_name == selected_comp
-            )
+                DAMACase.dama_competence_name == selected_comp)
             case_result = await session.execute(case_query)
             case = case_result.scalars().first()
 
-            selected_questions = balance_questions(theory_questions, practice_questions)
+            selected_questions = balance_questions(theory_questions,
+                                                   practice_questions)
 
             return {
                 'questions': selected_questions,
@@ -52,18 +50,23 @@ async def prepare_test_data(selected_role: str, selected_comp: str):
         except Exception as e:
             raise e
 
+
 def balance_questions(theory_questions, practice_questions):
     if len(theory_questions) >= 5 and len(practice_questions) >= 5:
         selected_questions = theory_questions[:5] + practice_questions[:5]
     else:
         min_count = min(len(theory_questions), len(practice_questions))
-        selected_questions = theory_questions[:min_count] + practice_questions[:min_count]
+        selected_questions = theory_questions[:
+                                              min_count] + practice_questions[:
+                                                                              min_count]
         remaining = 10 - len(selected_questions)
         if remaining > 0:
             if len(theory_questions) > min_count:
-                selected_questions += theory_questions[min_count:min_count + remaining]
+                selected_questions += theory_questions[min_count:min_count +
+                                                       remaining]
             else:
-                selected_questions += practice_questions[min_count:min_count + remaining]
+                selected_questions += practice_questions[min_count:min_count +
+                                                         remaining]
     return selected_questions
 
 
@@ -79,7 +82,7 @@ async def generate_test_report(user_id: int):
     total_completion_tokens = 0
 
     filtered_answers = []
-    
+
     for answer in answers:
         if not answer.get('user_answer'):
             logger.warning(f"Skipping answer with empty text: {answer}")
@@ -89,7 +92,8 @@ async def generate_test_report(user_id: int):
 
     for answer in filtered_answers:
         try:
-            score = float(answer.get('score', 0)) if isinstance(answer, dict) else 0
+            score = float(answer.get('score', 0)) if isinstance(answer,
+                                                                dict) else 0
             total_score += score
             valid_answers += 1
         except (ValueError, TypeError):
@@ -115,8 +119,8 @@ async def generate_test_report(user_id: int):
                 'test_date': datetime.utcnow()
             }
             result = await session.execute(
-                insert(TestResults).values(**test_result).returning(TestResults.id)
-            )
+                insert(TestResults).values(**test_result).returning(
+                    TestResults.id))
             test_result_id = result.scalar_one()
 
             for answer in filtered_answers:
@@ -137,10 +141,12 @@ async def generate_test_report(user_id: int):
                     'test_result_id': test_result_id,
                     'prompt_tokens': total_prompt_tokens,
                     'completion_tokens': total_completion_tokens,
-                    'total_tokens': total_prompt_tokens + total_completion_tokens,
+                    'total_tokens':
+                    total_prompt_tokens + total_completion_tokens,
                     'model': model
                 }
-                await session.execute(insert(Analytics).values(**analytics_data))
+                await session.execute(
+                    insert(Analytics).values(**analytics_data))
 
             await session.commit()
         except Exception as e:
@@ -150,21 +156,24 @@ async def generate_test_report(user_id: int):
 
     wb = Workbook()
     ws = wb.active
-    
-    if ws is not None: 
+
+    if ws is not None:
         ws.title = "DAMA Assessment Report"
     else:
         ws = wb.create_sheet("DAMA Assessment Report")
 
     header_font = Font(bold=True, name='Century Gothic', size=12)
     body_font = Font(name='Century Gothic', size=11)
-    center_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    header_fill = PatternFill(start_color='D5FD7B', end_color='D5FD7B', fill_type='solid')
+    center_alignment = Alignment(horizontal='center',
+                                 vertical='center',
+                                 wrap_text=True)
+    header_fill = PatternFill(start_color='D5FD7B',
+                              end_color='D5FD7B',
+                              fill_type='solid')
     thin_border = Border(left=Side(style='thin'),
                          right=Side(style='thin'),
                          top=Side(style='thin'),
                          bottom=Side(style='thin'))
-
 
     ws.merge_cells('A1:E1')
     title_cell = ws['A1']
@@ -178,13 +187,18 @@ async def generate_test_report(user_id: int):
 
     meta_rows = [
         ["Дата и время тестирования", "", "", "", ""],
-        ["ФИО тестируемого", "", "", "", ""],
-        ["Роль", "", "", "", ""],
-        ["Компетенция", "", "", "", ""],
-        ["Средняя оценка по компетенции", "", "", "", ""],
-        ["Экспертность в управлении данными DAMA (порог экспертности ≥ 4.5)", "", "", "", ""],
-        [None, None, None, None, None],
-        ["Область знаний/Основные работы", "Вопрос", "Пользовательский ответ", "Рекомендуемые материалы для изучения", "Оценка (1-5)"]
+        ["ФИО тестируемого", "", "", "", ""], ["Роль", "", "", "", ""],
+        ["Компетенция", "", "", "",
+         ""], ["Средняя оценка по компетенции", "", "", "", ""],
+        [
+            "Экспертность в управлении данными DAMA (порог экспертности ≥ 4.5)",
+            "", "", "", ""
+        ], [None, None, None, None, None],
+        [
+            "Область знаний/Основные работы", "Вопрос",
+            "Пользовательский ответ", "Рекомендуемые материалы для изучения",
+            "Оценка (1-5)"
+        ]
     ]
 
     for row_idx, row in enumerate(meta_rows, start=3):
@@ -223,12 +237,10 @@ async def generate_test_report(user_id: int):
         row = [
             answer.get('knowledge_area', ''),
             answer.get('question', ''),
-            answer.get('user_answer', ''),
-            recommendations,
+            answer.get('user_answer', ''), recommendations,
             float(answer.get('score', 0))
         ]
         ws.append(row)
-
 
         for col in range(1, 6):
             cell = ws.cell(row=ws.max_row, column=col)
@@ -244,7 +256,9 @@ async def generate_test_report(user_id: int):
 
     for row in ws.iter_rows():
         for cell in row:
-            cell.alignment = Alignment(wrap_text=True, horizontal='center', vertical='center')
+            cell.alignment = Alignment(wrap_text=True,
+                                       horizontal='center',
+                                       vertical='center')
 
     excel_buffer = io.BytesIO()
     wb.save(excel_buffer)
@@ -257,31 +271,29 @@ async def generate_test_report(user_id: int):
         'excel_file': excel_buffer
     }
 
+
 async def get_available_roles():
     """Получение списка доступных ролей DAMA из базы данных"""
     try:
         async with get_async_session() as session:
             result = await session.execute(
-                select(DMARoles.dama_role_name).distinct()
-            )
+                select(DMARoles.dama_role_name).distinct())
             roles = result.scalars().all()
             return sorted(roles) if roles else []
     except Exception as e:
         logger.error(f"Error while getting roles: {e}")
         return []
 
+
 async def get_competencies_for_role(role: str):
-    """Получение компетенций для конкретной роли из базы данных"""
     try:
         if not role:
             return []
 
         async with get_async_session() as session:
             result = await session.execute(
-                select(DAMACompetency.dama_competence_name)
-                .where(DAMACompetency.dama_role_name == role)
-                .distinct()
-            )
+                select(DAMACompetency.dama_competence_name).where(
+                    DAMACompetency.dama_role_name == role).distinct())
             competencies = result.scalars().all()
             return sorted(competencies) if competencies else []
     except Exception as e:

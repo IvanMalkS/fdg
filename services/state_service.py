@@ -7,32 +7,34 @@ from config import Config
 from services.logger import logger
 from datetime import datetime
 
+
 class RedisStateStorage:
+
     def __init__(self):
-        self.redis = Redis(
-            host=Config.REDIS_HOST,
-            port=Config.REDIS_PORT,
-            db=0,
-            password=Config.REDIS_USER_PASSWORD,
-            username=Config.REDIS_USER,
-            decode_responses=False
-        )
+        self.redis = Redis(host=Config.REDIS_HOST,
+                           port=Config.REDIS_PORT,
+                           db=0,
+                           password=Config.REDIS_USER_PASSWORD,
+                           username=Config.REDIS_USER,
+                           decode_responses=False)
         self.storage = RedisStorage(redis=self.redis)
 
     def _serialize_sqlalchemy_obj(self, obj):
-        """Сериализует SQLAlchemy объект в словарь"""
         if obj is None:
             return None
-            
+
         if isinstance(obj, list):
             return [self._serialize_sqlalchemy_obj(item) for item in obj]
-            
+
         if isinstance(obj, dict):
-            return {k: self._serialize_sqlalchemy_obj(v) for k, v in obj.items()}
-            
+            return {
+                k: self._serialize_sqlalchemy_obj(v)
+                for k, v in obj.items()
+            }
+
         if isinstance(obj, datetime):
             return obj.isoformat()
-            
+
         if hasattr(obj, '__table__'):
             # Специальная обработка для DAMAQuestion и DAMACase
             if obj.__class__.__name__ == 'DAMAQuestion':
@@ -57,12 +59,15 @@ class RedisStateStorage:
                     'case_answer': obj.case_answer,
                     'dama_knowledge_area': obj.dama_knowledge_area
                 }
-            return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
-            
+            return {
+                c.name: getattr(obj, c.name)
+                for c in obj.__table__.columns
+            }
+
         return obj
 
-    async def save_state(self, user_id: int, state: State, data: Dict[str, Any]) -> bool:
-        """Сохраняет состояние пользователя в Redis"""
+    async def save_state(self, user_id: int, state: State,
+                         data: Dict[str, Any]) -> bool:
         try:
             key = f"state:{user_id}"
             serialized_data = self._serialize_sqlalchemy_obj(data)
@@ -77,16 +82,17 @@ class RedisStateStorage:
             logger.error(f"Error saving state: {e}")
             return False
 
-    async def get_state(self, user_id: int) -> tuple[Optional[State], Dict[str, Any]]:
-        """Получает состояние пользователя из Redis"""
+    async def get_state(
+            self, user_id: int) -> tuple[Optional[State], Dict[str, Any]]:
         try:
             key = f"state:{user_id}"
             data = await self.redis.get(key)
             if not data:
                 return None, {}
-            
+
             state_data = json.loads(data)
-            state = State(state=state_data["state"]) if state_data["state"] else None
+            state = State(
+                state=state_data["state"]) if state_data["state"] else None
             return state, state_data.get("data", {})
         except json.JSONDecodeError:
             return None, {}
@@ -95,7 +101,6 @@ class RedisStateStorage:
             return None, {}
 
     async def clear_state(self, user_id: int) -> bool:
-        """Очищает состояние пользователя"""
         try:
             key = f"state:{user_id}"
             result = await self.redis.delete(key)
@@ -104,8 +109,8 @@ class RedisStateStorage:
             logger.error(f"Error clearing state: {e}")
             return False
 
-    async def update_data(self, user_id: int, new_data: Dict[str, Any]) -> bool:
-        """Обновляет данные пользователя в Redis, сохраняя текущее состояние"""
+    async def update_data(self, user_id: int, new_data: Dict[str,
+                                                             Any]) -> bool:
         try:
             key = f"state:{user_id}"
             existing = await self.redis.get(key)
@@ -125,7 +130,7 @@ class RedisStateStorage:
             return False
 
     async def get_storage(self):
-        """Возвращает экземпляр RedisStorage для использования с FSMContext"""
         return self.storage
 
-state_storage = RedisStateStorage() 
+
+state_storage = RedisStateStorage()
