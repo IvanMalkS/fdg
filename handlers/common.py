@@ -7,7 +7,6 @@ from services.logger import logger
 from sqlalchemy import select
 from aiogram.fsm.context import FSMContext
 from services.keyboard import build_start_buttons
-from services.user_utils import is_user_banned
 from aiogram import F, Router
 
 common_router = Router()
@@ -19,10 +18,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await message.answer("Не удалось определить отправителя.")
         return
 
-    if await is_user_banned(message.from_user.id):
-        await message.answer("Вы заблокированы и не можете использовать бота.")
-        return
-
     async with get_async_session() as session:
         try:
             await state.clear()
@@ -30,6 +25,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
             result = await session.execute(select(User).where(User.id == message.from_user.id))
             existing_user = result.scalars().first()
 
+            # Проверяем бан для команды /start, чтобы показать сообщение
             if existing_user and str(existing_user.role) == UserRole.BANNED:
                 await message.answer("Вы заблокированы и не можете использовать бота.")
                 return

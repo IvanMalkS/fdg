@@ -13,7 +13,7 @@ from services.redis_service import RedisService
 from db.models import DAMAQuestion, DAMACase, TestResults
 from services.state_service import state_storage
 from typing import Dict, Any, Callable, Coroutine
-from services.user_utils import is_user_banned
+
 from db.database import get_async_session
 from sqlalchemy import update
 
