@@ -1,6 +1,7 @@
 from config import Config
 from aiogram import Bot, Dispatcher
 from services.state_service import state_storage
+from services.middleware import BanCheckMiddleware
 
 from handlers.test_handlers import test_router
 from handlers.admin_hendler import admin_router
@@ -18,6 +19,10 @@ async def init_bot() -> None:
     
     storage = await state_storage.get_storage()
     dp = Dispatcher(storage=storage)
+
+    # Setup middleware
+    dp.message.middleware(BanCheckMiddleware())
+    dp.callback_query.middleware(BanCheckMiddleware())
 
     setup_handlers(dp)
 

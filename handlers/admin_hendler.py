@@ -14,7 +14,7 @@ from services.redis_service import RedisService
 from services.logger import logger
 from db.enums import UserRole
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from services.user_utils import is_user_banned
+
 from services.minio_service import MinioService
 
 admin_router = Router()
@@ -28,7 +28,7 @@ async def admin_panel(message: Message, state: FSMContext):
             message.from_user.id):
         await message.answer("Вы заблокированы и не можете использовать бота.")
         return
-
+     
     if not await is_admin(message, state=state):
         await message.answer("У вас нет прав администратора")
         return

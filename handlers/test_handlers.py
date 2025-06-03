@@ -13,7 +13,7 @@ from services.redis_service import RedisService
 from db.models import DAMAQuestion, DAMACase, TestResults
 from services.state_service import state_storage
 from typing import Dict, Any, Callable, Coroutine
-from services.user_utils import is_user_banned
+
 from db.database import get_async_session
 from sqlalchemy import update
 
@@ -58,9 +58,7 @@ def _deserialize_case(data: Dict[str, Any]) -> DAMACase:
 @test_router.message(F.text == "Начать тестирование")
 @handle_errors("Произошла ошибка при запуске теста.")
 async def start_test(message: types.Message, state: FSMContext, **kwargs):
-    """Начало тестирования - запрос ФИО"""
-    if message and message.from_user and await is_user_banned(
-            message.from_user.id):
+    if message and message.from_user:
         await message.answer("Вы заблокированы и не можете использовать бота.")
         return
 
