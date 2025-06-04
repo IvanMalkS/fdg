@@ -7,3 +7,15 @@ packages = ["glibcLocales", "postgresql"]
 
 [deployment]
 run = ["sh", "-c", "poetry run python main.py"]
+
+[workflows]
+runButton = "Run Bot"
+
+[[workflows.workflow]]
+name = "Run Bot"
+author = 27580321
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "poetry run python main.py"
