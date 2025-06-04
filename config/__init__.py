@@ -1,5 +1,5 @@
 
-from .settings import settings, AppSettings, load_settings
+from .settings import settings, AppSettings
 
 # Create a Config class that provides access to the settings
 class Config:
@@ -94,4 +94,4 @@ class Config:
 # Create a global instance
 Config = Config()
 
-__all__ = ['settings', 'AppSettings', 'load_settings', 'Config']
+__all__ = ['settings', 'AppSettings', 'Config']

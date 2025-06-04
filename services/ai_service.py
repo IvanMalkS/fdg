@@ -1,4 +1,3 @@
-
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +34,7 @@ class AiService:
         if len(prompt) > 4000:
             logger.warning("Prompt too long")
             return False
-        
+
         success = await self.settings_repo.update_prompt(prompt)
         if success:
             await self.redis_service.save_prompt(prompt)
@@ -46,7 +45,7 @@ class AiService:
         if not (0.0 <= temperature <= 2.0):
             logger.warning(f"Invalid temperature value: {temperature}")
             return False
-        
+
         success = await self.settings_repo.update_temperature(temperature)
         if success:
             await self.redis_service.save_model_temperature(temperature)
@@ -69,13 +68,13 @@ class AiService:
         creators = await self.ai_creator_repo.get_all()
         for creator in creators:
             creator.selected = False
-        
+
         # Выделяем нужного
         creator = await self.ai_creator_repo.get_by_id(creator_id)
         if creator:
             creator.selected = True
             await self.ai_creator_repo.session.commit()
-            
+
             # Обновляем Redis
             await self.redis_service.save_openai_token(creator.token)
             await self.redis_service.save_selected_url(creator.url)
@@ -88,13 +87,13 @@ class AiService:
         models = await self.model_repo.get_all()
         for model in models:
             model.selected = False
-        
+
         # Выделяем нужную
         model = await self.model_repo.get_by_id(model_id)
         if model:
             model.selected = True
             await self.model_repo.session.commit()
-            
+
             # Обновляем Redis
             await self.redis_service.save_selected_ai_model(model.name)
             return True
@@ -105,7 +104,7 @@ class AiService:
         creator = await self.get_selected_ai_creator()
         model = await self.get_selected_model()
         settings = await self.get_ai_settings()
-        
+
         return {
             'creator': {
                 'id': creator.id if creator else None,
