@@ -58,8 +58,8 @@ def _deserialize_case(data: Dict[str, Any]) -> DAMACase:
 @test_router.message(F.text == "Начать тестирование")
 @handle_errors("Произошла ошибка при запуске теста.")
 async def start_test(message: types.Message, state: FSMContext, **kwargs):
-    if message and message.from_user:
-        await message.answer("Вы заблокированы и не можете использовать бота.")
+    if not message.from_user:
+        await message.answer("Не удалось определить пользователя.")
         return
 
     ai_model_name = await redis_service.load_selected_ai_model()
