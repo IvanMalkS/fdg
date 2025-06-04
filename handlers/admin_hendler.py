@@ -24,11 +24,10 @@ minio_service = MinioService()
 
 @admin_router.message(F.text == "Админ")
 async def admin_panel(message: Message, state: FSMContext):
-    if message and message.from_user and await is_user_banned(
-            message.from_user.id):
+    if message and message.from_user:
         await message.answer("Вы заблокированы и не можете использовать бота.")
         return
-     
+
     if not await is_admin(message, state=state):
         await message.answer("У вас нет прав администратора")
         return
